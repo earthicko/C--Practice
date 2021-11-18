@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "gcc - 활성 파일 빌드 및 디버그",
+            "name": "g++ - 활성 파일 빌드 및 디버그",
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
@@ -22,7 +22,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "save and compile for C",
+            "preLaunchTask": "C/C++: g++ 활성 파일 빌드",
             "miDebuggerPath": "/usr/bin/gdb"
         }
     ]
