@@ -6,7 +6,7 @@ int& clip_int(int& orig, int start, int end) {
     return orig;
 }
 
-class Data {
+class Date {
     int year;
     int month;
     int day;
@@ -49,7 +49,17 @@ class Data {
         int added = year + inc;
         year = clip_int(added, 0, 5000);
     }
-    void set_date(int _year, int _month, int _day) {
+    void print_date() {
+        std::cout << year << "-" << month << "-" << day << std::endl;
+    }
+
+    Date() {
+        year = 2021;
+        month = 11;
+        day = 19;
+    }
+
+    Date(int _year, int _month, int _day) {
         year = clip_int(_year, 0, 5000);
         month = clip_int(_month, 1, 12);
         switch (month) {
@@ -93,51 +103,50 @@ class Data {
                 break;
         }
     }
-    void print_date() {
-        std::cout << year << "-" << month << "-" << day << std::endl;
-    }
 };
 
 int main() {
-    Data data;
-    data.set_date(2021, 11, 19);
-    data.print_date();
+    Date default_date = Date();
+    default_date.print_date();
+
+    Date date(2021, 11, 19);
+    date.print_date();
 
     std::cout << "Add 3 days" << std::endl;
-    data.add_day(3);
-    data.print_date();
+    date.add_day(3);
+    date.print_date();
 
     std::cout << "Add 12 days" << std::endl;
-    data.add_day(12);
-    data.print_date();
+    date.add_day(12);
+    date.print_date();
 
     std::cout << "Add 2 months" << std::endl;
-    data.add_month(2);
-    data.print_date();
+    date.add_month(2);
+    date.print_date();
 
     std::cout << "Add -1 years" << std::endl;
-    data.add_year(-1);
-    data.print_date();
+    date.add_year(-1);
+    date.print_date();
 
     std::cout << "Add 5000 years" << std::endl;
-    data.add_year(5000);
-    data.print_date();
+    date.add_year(5000);
+    date.print_date();
 
     std::cout << "Add -10000 years" << std::endl;
-    data.add_year(-10000);
-    data.print_date();
+    date.add_year(-10000);
+    date.print_date();
 
     std::cout << "Add 2021 years" << std::endl;
-    data.add_year(2021);
-    data.print_date();
+    date.add_year(2021);
+    date.print_date();
 
     std::cout << "Add -35 days" << std::endl;
-    data.add_day(-35);
-    data.print_date();
+    date.add_day(-35);
+    date.print_date();
 
-    std::cout << "Add +100 days"<<std::endl;
-    data.add_day(100);
-    data.print_date();
+    std::cout << "Add +100 days" << std::endl;
+    date.add_day(100);
+    date.print_date();
 
     return 0;
 }
