@@ -3,6 +3,7 @@
 #include <iostream>
 int char_len(const char* str);
 double char_to_double(const char* str, int str_len);
+int count_digits(double source);
 class Complex {
    private:
     double real, img;
@@ -15,46 +16,32 @@ class Complex {
         real = target.real;
         img = target.img;
     }
+    Complex(const char* s) {
+        Complex c = parse_char(s);
+        real = c.real;
+        img = c.img;
+    }
 
-    Complex operator+(const Complex& target);
-    Complex operator-(const Complex& target);
-    Complex operator*(const Complex& target);
-    Complex operator/(const Complex& target);
     Complex& operator=(const Complex& target);
     Complex& operator+=(const Complex& target);
     Complex& operator-=(const Complex& target);
     Complex& operator*=(const Complex& target);
     Complex& operator/=(const Complex& target);
+    friend Complex operator+(const Complex& a, const Complex& b);
+    friend Complex operator-(const Complex& a, const Complex& b);
+    friend Complex operator*(const Complex& a, const Complex& b);
+    friend Complex operator/(const Complex& a, const Complex& b);
 
-    void print() { std::cout << "(" << real << " + " << img << "i)"; }
-    void println() {
+    char* to_string() const;
+    void print() const { std::cout << to_string() << "i)"; }
+    void println() const {
         print();
         std::cout << std::endl;
     }
+    friend std::ostream& operator<<(std::ostream& o, const Complex& out);
     static Complex parse_char(const char* str);
 };
 
-Complex Complex::operator+(const Complex& target) {
-    Complex output(real + target.real, img + target.img);
-    return output;
-}
-Complex Complex::operator-(const Complex& target) {
-    Complex output(real - target.real, img - target.img);
-    return output;
-}
-Complex Complex::operator*(const Complex& target) {
-    double new_real = real * target.real - img * target.img;
-    double new_img = img * target.real + real * target.img;
-    Complex output(new_real, new_img);
-    return output;
-}
-Complex Complex::operator/(const Complex& target) {
-    double com_div = target.real * target.real + target.img * target.img;
-    double new_real = (real * target.real + img * target.img) / com_div;
-    double new_img = (img * target.real - real * target.img) / com_div;
-    Complex output(new_real, new_img);
-    return output;
-}
 Complex& Complex::operator=(const Complex& target) {
     real = target.real;
     img = target.img;
@@ -75,6 +62,50 @@ Complex& Complex::operator*=(const Complex& target) {
 Complex& Complex::operator/=(const Complex& target) {
     (*this) = (*this) / target;
     return *this;
+}
+Complex operator+(const Complex& a, const Complex& b) {
+    Complex output(a.real + b.real, a.img + b.img);
+    return output;
+}
+Complex operator-(const Complex& a, const Complex& b) {
+    Complex output(a.real - b.real, a.img - b.img);
+    return output;
+}
+Complex operator*(const Complex& a, const Complex& b) {
+    double new_real = a.real * b.real - a.img * b.img;
+    double new_img = a.img * b.real + a.real * b.img;
+    Complex output(new_real, new_img);
+    return output;
+}
+Complex operator/(const Complex& a, const Complex& b) {
+    double com_div = b.real * b.real + b.img * b.img;
+    double new_real = (a.real * b.real + a.img * b.img) / com_div;
+    double new_img = (a.img * b.real - a.real * b.img) / com_div;
+    Complex output(new_real, new_img);
+    return output;
+}
+char* Complex::to_string() const {
+    // 0123456789
+    // (rrr + ii)
+    // real_digits = 3;
+    // img_digits = 2;
+    // total_digits = 10;
+    // real -> 3 2 1
+    int real_digits = count_digits(real);
+    int img_digits = count_digits(img);
+    int real_c = real;
+    int img_c = img;
+    if (real_c < 0) {
+        real_c = -real_c;
+        real_digits++;
+    }
+    int total_digits = 5 + real_digits + img_digits;
+    char* output = new char[total_digits];
+    output[0] = '(';
+    for (int i = real_digits; i >= 1; i--) {
+        output[i] = (char)((real_c % 10) + 48);
+        real_c /= 10;
+    }
 }
 Complex Complex::parse_char(const char* str) {
     /*
@@ -139,6 +170,10 @@ Complex Complex::parse_char(const char* str) {
     Complex output(real, img);
     return output;
 }
+std::ostream& operator<<(std::ostream& os, const Complex& out) {
+    os << out.to_string();
+    return os;
+}
 int main() {
     // Complex a(1.0, 2.0);
     // Complex b(3.0, -2.0);
@@ -153,16 +188,42 @@ int main() {
     char test2[] = "0098.7883-2.89i";
     char test3[] = "3001.3";
     char test4[] = "0023.040i";
-    Complex res0 = Complex::parse_char(test0);
-    Complex res1 = Complex::parse_char(test1);
-    Complex res2 = Complex::parse_char(test2);
-    Complex res3 = Complex::parse_char(test3);
-    Complex res4 = Complex::parse_char(test4);
-    res0.println();
-    res1.println();
-    res2.println();
-    res3.println();
-    res4.println();
+
+    Complex target(2, 3);
+    Complex res0 = target + test0;
+    Complex res0_r = test0 + target;
+    Complex res1 = target - test1;
+    Complex res1_r = test1 - target;
+    Complex res2 = target * test2;
+    Complex res2_r = test2 * target;
+    Complex res3 = target / test3;
+    Complex res3_r = test3 / target;
+    Complex res4 = target + test4;
+    Complex res4_r = test4 + target;
+
+    std::cout << res0 << std::endl;
+    std::cout << res0_r << std::endl;
+    std::cout << res1 << std::endl;
+    std::cout << res1_r << std::endl;
+    std::cout << res2 << std::endl;
+    std::cout << res2_r << std::endl;
+    std::cout << res3 << std::endl;
+    std::cout << res3_r << std::endl;
+    std::cout << res4 << std::endl;
+    std::cout << res4_r << std::endl;
+
+    res0 = res0_r + target;
+    res1 = res1_r + target;
+    res2 = res2_r + target;
+    res3 = res3_r + target;
+    res4 = res4_r + target;
+
+    std::cout << res0 << std::endl;
+    std::cout << res1 << std::endl;
+    std::cout << res2 << std::endl;
+    std::cout << res3 << std::endl;
+    std::cout << res4 << std::endl;
+
     return 0;
 }
 int char_len(const char* str) {
@@ -198,4 +259,12 @@ double char_to_double(const char* str, int str_len) {
     }
     if (sign == false) output = -output;
     return output;
+}
+int count_digits(double source) {
+    int digits = 0;
+    while (source != 0) {
+        digits++;
+        source /= 10;
+    }
+    return digits;
 }
