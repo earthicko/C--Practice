@@ -11,11 +11,12 @@ class Array {
     int* size;
 
     struct Address {
-        int level;
-        void* next;
+        int level;   // how deep this address is
+        void* next;  // pointer of the first child node. can be *int(deepest
+                     // nodes) or *Address(the rest)
     };
 
-    Address* start;
+    Address* start;  // the highest node
 
    public:
     Array(int _dim, int* _size) : dim(_dim) {
@@ -23,22 +24,25 @@ class Array {
         for (int i = 0; i < _dim; i++) size[i] = _size[i];
         start = new Address;
         start->level = 0;
-        init(start);
+        initialise_array(start);
     }
+
     Array(const Array& src) : dim(src.dim) {
         size = new int[dim];
         for (int i = 0; i < dim; i++) size[i] = src.size[i];
         start = new Address;
         start->level = 0;
-        init(start);
+        initialise_array(start);
         copy_address(src.start, start);
     }
+
     ~Array() {
-        del(start);
+        delete_array(start);
         delete start;
         delete[] size;
     }
-    void init(Address* current) {
+
+    void initialise_array(Address* current) {
         if (!current) return;
         if (current->level == dim - 1) {
             current->next = new int[size[current->level]];
@@ -46,22 +50,25 @@ class Array {
         }
         current->next = new Address[size[current->level]];
         for (int i = 0; i < size[current->level]; i++) {
-            (static_cast<Address*>(current->next) + i)->level =
-                current->level + 1;
-            init(static_cast<Address*>(current->next) + i);
+            Address* next_address = static_cast<Address*>(current->next);
+            (next_address + i)->level = current->level + 1;
+            initialise_array(next_address + i);
         }
     }
-    void del(Address* current) {
+
+    void delete_array(Address* current) {
         if (!current) return;
         if (current->level != dim - 1) {
+            Address* next_address = static_cast<Address*>(current->next);
             for (int i = 0; i < size[current->level]; i++) {
-                del(static_cast<Address*>(current->next) + i);
+                delete_array(next_address + i);
             }
-            delete[] static_cast<Address*>(current->next);
+            delete[] next_address;
             return;
         }
         delete[] static_cast<int*>(current->next);
     }
+
     void copy_address(Address* src, Address* dest) {
         if (!src || !dest) return;
         if (src->level != dest->level) return;
@@ -76,9 +83,9 @@ class Array {
         for (int i = 0; i < size[src->level]; i++)
             copy_address(from + i, to + i);
     }
-    Int operator[](const int index);
+
     class Iterator {
-        int* location;
+        int* location;  // [2][1][3] -> {2, 1, 3}
         Array* arr;
 
        public:
@@ -87,19 +94,24 @@ class Array {
             for (int i = 0; i < arr->dim; i++)
                 location[i] = (_location[i] != NULL ? _location[i] : 0);
         }
+
         Iterator(const Iterator& src) : arr(src.arr) {
             location = new int[arr->dim];
             for (int i = 0; i < arr->dim; i++) location[i] = src.location[i];
         }
+
         ~Iterator() { delete[] location; }
+
         Iterator& operator++() {
             if (location[0] >= arr->size[0]) return (*this);
 
             bool carry = false;
-            int i = arr->dim - 1;
+            int i = arr->dim - 1;  // ++ from the furthest location
             do {
                 location[i]++;
                 if (location[i] >= arr->size[i] && i >= 1) {
+                    // i == 0 -> don't carry, just let it be overflown
+                    // [overflown][0][0]... means exhausted iterator
                     carry = true;
                     location[i] -= arr->size[i];
                     i--;
@@ -108,39 +120,50 @@ class Array {
                 }
             } while (i >= 0 && carry);
 
-            return *this;
+            return (*this);
         }
+
         Iterator operator++(int) {
             Iterator temp(*this);
             ++(*this);
             return temp;
         }
+
         Int operator*();
+
         Iterator& operator=(const Iterator& src) {
             arr = src.arr;
-            if (!location) delete[] location;
+            if (location) delete[] location;
             location = new int[arr->dim];
             for (int i = 0; i < arr->dim; i++) location[i] = src.location[i];
 
             return (*this);
         }
+
         bool operator!=(const Iterator& src) {
+            // mainly for usecases in for loops
             if (src.arr->dim != arr->dim) return true;
             for (int i = 0; i < arr->dim; i++) {
                 if (src.location[i] != location[i]) return true;
             }
             return false;
         }
+
+        bool operator==(const Iterator& src) {
+            return !(this->operator!=(src));
+        }
     };
     friend Iterator;
-    Iterator begin() {
+
+    Iterator begin() {  // [0][0][0]
         int* arr = new int[dim];
         for (int i = 0; i < dim; i++) arr[i] = 0;
         Iterator temp(this, arr);
         delete[] arr;
         return temp;
     }
-    Iterator end() {
+
+    Iterator end() {  //[!!][0][0]
         int* arr = new int[dim];
         arr[0] = size[0];
         for (int i = 1; i < dim; i++) arr[i] = 0;
@@ -148,7 +171,10 @@ class Array {
         delete[] arr;
         return temp;
     }
+
+    Int operator[](const int index);
 };
+
 class Int {
     void* data;
     int level;
@@ -161,16 +187,14 @@ class Int {
             data = NULL;
             return;
         }
-        void* next_addresses = static_cast<Array::Address*>(data)->next;
+        void* next_addrs = static_cast<Array::Address*>(data)->next;
         if (level == array->dim - 1) {
-            // 이제 data 에 우리의 int 자료형을 저장하도록 해야 한다.
-            int* next_address = static_cast<int*>(next_addresses) + index;
-            data = static_cast<void*>(next_address);
+            int* next_addr_start = static_cast<int*>(next_addrs);
+            data = static_cast<void*>(next_addr_start + index);
         } else {
-            // 그렇지 않을 경우 data 에 그냥 다음 addr 을 넣어준다.
-            Array::Address* next_address =
-                static_cast<Array::Address*>(next_addresses) + index;
-            data = static_cast<void*>(next_address);
+            Array::Address* next_addr_start =
+                static_cast<Array::Address*>(next_addrs);
+            data = static_cast<void*>(next_addr_start + index);
         }
     }
 
@@ -180,26 +204,31 @@ class Int {
         if (data) return *static_cast<int*>(data);
         return -9999;
     }
+
     Int& operator=(const int& a) {
         if (data) *static_cast<int*>(data) = a;
         return *this;
     }
+
     Int operator[](const int index) {
         if (!data) return -9999;
         return Int(index, level + 1, data, array);
     }
 };
+
 Int Array::operator[](const int index) {
     return Int(index, 0, static_cast<void*>(start), this);
 }
+
 Int Array::Iterator::operator*() {
     Int start = (*arr)[location[0]];
-    for (int i = 0; i < arr->dim - 1; i++) {
+    for (int i = 1; i < arr->dim; i++) {
         start = start[location[i]];
     }
     return start;
 }
 }  // namespace MyArray
+
 int main() {
     int size[] = {2, 3, 4};
     MyArray::Array arr(3, size);
