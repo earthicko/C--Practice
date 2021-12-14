@@ -28,41 +28,194 @@ class TextTable;
 class CSVTable;
 class HTMLTable;
 class Cell {
+   protected:
     Table* table;
-    std::string data;
     int row, col;
 
     friend class Table;
 
    public:
-    Cell(const std::string& data);
-    Cell(const std::string& data, int row, int col);
-    Cell(const std::string& data, int row, int col, Table* table);
+    Cell();
+    Cell(int row, int col);
+    Cell(int row, int col, Table* table);
 
-    std::string get_data();
+    virtual std::string to_string() = 0;
+    virtual float to_numeric() = 0;
 };
 
-Cell::Cell(const std::string& data) : data(data) {
-    row = 0;
-    col = 0;
-    table = NULL;
+Cell::Cell() : row(0), col(0), table(NULL) {}
+
+Cell::Cell(int row, int col) : row(row), col(col), table(NULL) {}
+
+Cell::Cell(int row, int col, Table* table) : row(row), col(col), table(table) {}
+
+class StringCell : public Cell {
+    std::string data;
+
+   public:
+    StringCell(const std::string& data);
+    std::string to_string() override;
+    float to_numeric() override;
+};
+
+class NumberCell : public Cell {
+    float data;
+
+   public:
+    NumberCell(const std::string& src);
+    NumberCell(const float& src);
+    std::string to_string() override;
+    float to_numeric() override;
+};
+
+class DateCell : public Cell {
+    struct date {
+        int year;
+        int month;
+        int date;
+    };
+
+    struct date data;
+
+   public:
+    DateCell(const std::string& data);
+    DateCell(const int& year, const int& month, const int& date);
+    std::string to_string() override;
+    float to_numeric() override;
+};
+
+class ExprCell : public Cell {
+    class expr {
+       public:
+        ExprCell* cell;
+        char op;
+        int row;
+        int col;
+        std::string to_string();
+        float to_numeric();
+    };
+
+    expr** data;
+    int num_expr;
+
+   public:
+    ExprCell(const std::string& data);
+    std::string to_string() override;
+    float to_numeric() override;
+};
+
+StringCell::StringCell(const std::string& data) : Cell(), data(data) {}
+NumberCell::NumberCell(const std::string& src) : Cell() {
+    // string to float
+    float converted = 0.0;
+    data = converted;
+}
+NumberCell::NumberCell(const float& src) : Cell(), data(src) {}
+DateCell::DateCell(const std::string& src) : Cell() {
+    // string to date
+    struct date converted = {0, 0, 0};
+    data = converted;
+}
+DateCell::DateCell(const int& year, const int& month, const int& date)
+    : Cell() {
+    data.year = year;
+    data.month = month;
+    data.date = date;
+}
+ExprCell::ExprCell(const std::string& src) : Cell() {
+    // expression parsing
+    // data = new struct expr[10];
+    num_expr = 1;
+    for (int i = 1; i < src.length(); i++) {
+        if (src[i] == '+' || src[i] == '-' || src[i] == '*' || src[i] == '/')
+            num_expr++;
+    }
+
+    data = new expr*[num_expr];
+
+    int curr_expr = 0;
+    int curr_pos = 0;
+    while (curr_expr < num_expr) {
+        struct expr* new_expr = new expr;
+        if (curr_expr == 0 && src[0] != '+' && src[0] != '-' && src[0] != '*' &&
+            src[0] != '/') {
+            // 첫 글자가 연산자가 아님
+            // B2 -> B: col, 2: row
+            new_expr->op = '+';
+            new_expr->col = src[curr_pos++] - 65;
+            new_expr->row = src[curr_pos++] - 49;
+        } else {
+            // 첫 글자는 연산자여야 함
+            new_expr->op = src[curr_pos++];
+            new_expr->col = src[curr_pos++] - 65;
+            new_expr->row = src[curr_pos++] - 49;
+        }
+        new_expr->cell = this;
+        data[curr_expr] = new_expr;
+        curr_expr++;
+    }
 }
 
-Cell::Cell(const std::string& data, int row, int col)
-    : data(data), row(row), col(col) {
-    table = NULL;
+std::string StringCell::to_string() { return data; }
+std::string NumberCell::to_string() {
+    std::string converted = std::to_string(data);
+    return converted;
+}
+std::string DateCell::to_string() {
+    std::string converted;
+    converted = converted + std::to_string(data.year) + "-" +
+                std::to_string(data.month) + "-" + std::to_string(data.date);
+    return converted;
+}
+std::string ExprCell::to_string() {
+    std::string converted = std::to_string(to_numeric());
+    return converted;
 }
 
-Cell::Cell(const std::string& data, int row, int col, Table* table)
-    : data(data), row(row), col(col), table(table) {}
+float StringCell::to_numeric() {
+    float converted;
+    try {
+        converted = std::stof(data);
+    } catch (const std::exception& expn) {
+        converted = 0.0;
+    }
+    return converted;
+}
+float NumberCell::to_numeric() { return data; }
+float DateCell::to_numeric() {
+    float converted = data.year * 10000 + data.month * 100 + data.date;
+    return converted;
+}
+float ExprCell::to_numeric() {
+    float converted = data[0]->to_numeric();
+    for (int i = 1; i < num_expr; i++) {
+        switch (data[i]->op) {
+            case '+':
+                converted += data[i]->to_numeric();
+                break;
+            case '-':
+                converted -= data[i]->to_numeric();
+                break;
+            case '*':
+                converted *= data[i]->to_numeric();
+                break;
+            case '/':
+                converted /= data[i]->to_numeric();
+                break;
 
-std::string Cell::get_data() { return data; }
+            default:
+                break;
+        }
+    }
+    return converted;
+}
 
 class Table {
    protected:
     Cell*** data_base;
     int alloc_row, alloc_col;
     int size_row, size_col;
+    std::string delimiter;
 
    public:
     Table();
@@ -73,8 +226,8 @@ class Table {
     std::string get_info();
     virtual std::string print_table() = 0;
     void reg_cell(Cell* c, int row, int col);
-    void reg_cell(std::string data, int row, int col);
-    std::string get_cell(int row, int col);
+    void reg_cell(const std::string& data, int row, int col);
+    Cell* get_cell(int row, int col);
 
     void alloc(int row, int col);
     void clear();
@@ -83,6 +236,8 @@ class Table {
 };
 
 class TextTable : public Table {
+    std::string delimiter = "\t\t";
+
    public:
     TextTable() : Table() {}
     TextTable(const Table* src) : Table(src) {}
@@ -90,6 +245,8 @@ class TextTable : public Table {
 };
 
 class CSVTable : public Table {
+    std::string delimiter = ", ";
+
    public:
     CSVTable() : Table() {}
     CSVTable(const Table* src) : Table(src) {}
@@ -158,7 +315,7 @@ void Table::alloc(int row, int col) {
                     data_base[i][j] = NULL;
             }
         }
-        for (int i = 0; i < alloc_row; i++) delete[] temp[i];
+        // for (int i = 0; i < alloc_row; i++) delete[] temp[i];
         // delete temp;
         alloc_row = row;
         alloc_col = col;
@@ -178,6 +335,7 @@ void Table::alloc(int row, int col) {
         alloc_col = col;
     } else if (row > alloc_row && col <= alloc_col) {
         // only realloc row
+        // 메모리가 한칸씩 밀림
         Cell*** temp = data_base;
         data_base = new Cell**[row];
         for (int i = 0; i < row; i++) {
@@ -186,8 +344,6 @@ void Table::alloc(int row, int col) {
             else
                 data_base[i] = new Cell*[alloc_col];
         }
-        for (int i = 0; i < alloc_row; i++) delete[] temp[i];
-        // delete temp;
         alloc_row = row;
     } else {
         // do nothing
@@ -206,14 +362,12 @@ void Table::reg_cell(Cell* c, int row, int col) {
     if (col >= size_col) size_col = col + 1;
 }
 
-void Table::reg_cell(std::string data, int row, int col) {
-    Cell* new_cell = new Cell(data, row, col, this);
+void Table::reg_cell(const std::string& data, int row, int col) {
+    StringCell* new_cell = new StringCell(data);
     reg_cell(new_cell, row, col);
 }
 
-std::string Table::get_cell(int row, int col) {
-    return data_base[row][col]->get_data();
-}
+Cell* Table::get_cell(int row, int col) { return data_base[row][col]; }
 
 void Table::clear() {
     for (int i = 0; i < alloc_row; i++) {
@@ -229,8 +383,8 @@ Table::~Table() { clear(); }
 std::string TextTable::print_table() {
     std::string out = "";
 
-    out = out + "=================================\n";
-    out = out + "\t";
+    out = out + "==========================================\n";
+    out = out + delimiter;
 
     for (int i = 0; i < size_col; i++) {
         char c_col;
@@ -238,17 +392,17 @@ std::string TextTable::print_table() {
             c_col = i + 65;
         else
             c_col = '?';
-        out = out + c_col + '\t';
+        out = out + c_col + delimiter;
     }
     out += '\n';
 
     for (int i = 0; i < size_row; i++) {
-        out = out + std::to_string(i + 1) + '\t';
+        out = out + std::to_string(i + 1) + delimiter;
         for (int j = 0; j < size_col; j++) {
             if (data_base[i][j])
-                out = out + data_base[i][j]->get_data() + '\t';
+                out = out + data_base[i][j]->to_string() + delimiter;
             else
-                out = out + '\t';
+                out = out + delimiter;
         }
         out += '\n';
     }
@@ -260,8 +414,8 @@ std::string CSVTable::print_table() {
     std::string out = "";
     for (int i = 0; i < size_row; i++) {
         for (int j = 0; j < size_col; j++) {
-            if (data_base[i][j]) out += data_base[i][j]->get_data();
-            if (j != size_col - 1) out += ", ";
+            if (data_base[i][j]) out += data_base[i][j]->to_string();
+            if (j != size_col - 1) out += delimiter;
         }
         out += '\n';
     }
@@ -310,7 +464,7 @@ std::string HTMLTable::print_table() {
         out += "\t\t<td>" + std::to_string(i + 1) + "</td>\n";
         for (int j = 0; j < size_col; j++) {
             out = out + "\t\t<td>";
-            if (data_base[i][j]) out = out + data_base[i][j]->get_data();
+            if (data_base[i][j]) out = out + data_base[i][j]->to_string();
             out = out + "</td>\n";
         }
         out += "\t</tr>\n";
@@ -325,14 +479,35 @@ std::ostream& operator<<(std::ostream& o, Table& t) {
     return o;
 }
 
+std::string ExprCell::expr::to_string() {
+    std::string converted = "";
+    char col_to_char = col + 65;
+    converted = converted + op + col_to_char + std::to_string(row);
+    return converted;
+}
+
+float ExprCell::expr::to_numeric() {
+    float converted = cell->table->get_cell(row, col)->to_numeric();
+    return converted;
+}
+
 int main() {
     TextTable* text = new TextTable();
 
-    Cell* a0 = new Cell("sex", 0, 0);
-    text->reg_cell("fuck", 1, 0);
-    text->reg_cell(a0, 0, 0);
-    text->reg_cell("suck", 1, 1);
-    text->reg_cell("high", 5, 2);
+    StringCell* a1 = new StringCell("rawstr");
+    NumberCell* c2 = new NumberCell(2.7);
+    NumberCell* b2 = new NumberCell(5.0);
+    NumberCell* d2 = new NumberCell(1.2);
+    DateCell* b3 = new DateCell(2021, 12, 14);
+    ExprCell* e4 = new ExprCell("B2+C2+D2");
+
+    text->reg_cell(a1, 0, 0);
+    text->reg_cell("strltr", 1, 0);
+    text->reg_cell(c2, 1, 2);
+    text->reg_cell(b2, 1, 1);
+    text->reg_cell(d2, 1, 3);
+    text->reg_cell(b3, 2, 1);
+    text->reg_cell(e4, 3, 4);
 
     CSVTable* csv = new CSVTable(text);
     HTMLTable* html = new HTMLTable(text);
@@ -342,11 +517,11 @@ int main() {
     std::string html_content = html->print_table();
 
     std::cout << text_content << std::endl;
-    std::cout << csv_content << std::endl;
-    std::cout << html_content << std::endl;
+    // std::cout << csv_content << std::endl;
+    // std::cout << html_content << std::endl;
 
-    std::ofstream html_out("./7-2/table.html");
-    if (html_out.is_open()) html_out << html_content;
+    // std::ofstream html_out("./7-2/table.html");
+    // if (html_out.is_open()) html_out << html_content;
 
     return 0;
 }
