@@ -234,8 +234,6 @@ class Table {
 };
 
 class TextTable : public Table {
-    std::string delimiter = "\t\t";
-
    public:
     TextTable() : Table() {}
     TextTable(const Table* src) : Table(src) {}
@@ -401,28 +399,52 @@ void Table::clear() {
 Table::~Table() { clear(); }
 
 std::string TextTable::print_table() {
-    std::string out = "";
+    /*    8       5    3
+      |---A----|  B  | C |
+    ======================
+    1 | string | 0.5 |   |
+    2 | 2      | du  | 1 |
+    */
+    std::string out = "  |";
 
-    out = out + "==========================================\n";
-    out = out + delimiter;
-
+    int* col_width = new int[size_col];
+    for (int i = 0; i < size_col; i++) {
+        int max = 0;
+        for (int j = 0; j < size_row; j++) {
+            if (data_base[j][i]) {
+                int len = data_base[j][i]->to_string().length();
+                if (len > max) max = len;
+            }
+        }
+        col_width[i] = max + 2;
+    }
     for (int i = 0; i < size_col; i++) {
         char c_col;
         if (0 <= i && i < 26)
-            c_col = i + 65;
+            c_col = i + 'A';
         else
             c_col = '?';
-        out = out + c_col + delimiter;
+        int space_count = col_width[i] - 1;
+        out += std::string(space_count / 2, ' ');
+        out += c_col;
+        out += std::string(space_count / 2, ' ');
+        if (space_count % 2) out += ' ';
+        out += '|';
     }
+    int row_width = out.length();
     out += '\n';
-
+    out += std::string(row_width, '=');
+    out += '\n';
     for (int i = 0; i < size_row; i++) {
-        out = out + std::to_string(i + 1) + delimiter;
+        out = out + std::to_string(i + 1) + " |";
         for (int j = 0; j < size_col; j++) {
-            if (data_base[i][j])
-                out = out + data_base[i][j]->to_string() + delimiter;
-            else
-                out = out + delimiter;
+            std::string cell = " ";
+            std::string content = "";
+            if (data_base[i][j]) content = data_base[i][j]->to_string();
+            cell += content;
+            cell += std::string(col_width[j] - content.length() - 1, ' ');
+            cell += '|';
+            out += cell;
         }
         out += '\n';
     }
@@ -511,9 +533,11 @@ float NumberCell::to_numeric() { return data; }
 float DateCell::to_numeric() { return static_cast<int>(data); }
 float ExprCell::to_numeric() {
     MyExcel::NumStack stack = MyExcel::NumStack();
-    while (expressions.size()!=0) {
-        std::string target = expressions[0];
-        expressions.remove(0);
+    MyExcel::Vector expr(expressions);
+
+    while (expr.size() > 0) {
+        std::string target = expr[0];
+        expr.remove(0);
         char rep = target[0];
         if ('0' <= rep && rep <= '9') {
             // number
@@ -543,13 +567,14 @@ float ExprCell::to_numeric() {
                     break;
             }
         }
-        std::cout << "============================\n";
-        std::cout << "Stack: ";
-        stack.print_all();
-        std::cout << "Vector: ";
-        expressions.print_all();
+        // std::cout << "============================\n";
+        // std::cout << "Stack: ";
+        // stack.print_all();
+        // std::cout << "Vector: ";
+        // expr.print_all();
     }
-    return stack.pop();
+    float output = stack.pop();
+    return output;
 }
 
 int ExprCell::precedence(char c) {
@@ -574,38 +599,104 @@ void ExprCell::describe() {
     std::cout << std::endl;
 }
 
+class Excel {
+    Table* table;
+
+   public:
+    Excel(int type);
+
+    int parse_input(const std::string& input);
+    void command_line();
+};
+
+Excel::Excel(int type) {
+    switch (type) {
+        case 0:
+            table = new TextTable();
+            break;
+        case 1:
+            table = new CSVTable();
+            break;
+        default:
+            table = new HTMLTable();
+            break;
+    }
+}
+
+int Excel::parse_input(const std::string& input) {
+    int next = 0;
+    std::string command = "";
+    for (int i = 0; i < input.length(); i++) {
+        if (input[i] == ' ') {
+            command = input.substr(0, i);
+            next = i + 1;
+            break;
+        } else if (i == input.length() - 1) {
+            command = input.substr(0, i + 1);
+            next = i + 1;
+            break;
+        }
+    }
+
+    std::string to = "";
+    for (int i = next; i < input.length(); i++) {
+        if (input[i] == ' ' || i == input.length() - 1) {
+            to = input.substr(next, i - next);
+            next = i + 1;
+            break;
+        } else if (i == input.length() - 1) {
+            to = input.substr(0, i + 1);
+            next = i + 1;
+            break;
+        }
+    }
+
+    int col = to[0] - 'A';
+    int row = atoi(to.c_str() + 1) - 1;
+
+    std::string rest = input.substr(next);
+
+    if (command == "sets") {
+        // set string
+        table->reg_cell(new StringCell(rest), row, col);
+    } else if (command == "setn") {
+        // set number
+        table->reg_cell(new NumberCell(std::stof(rest)), row, col);
+    } else if (command == "setd") {
+        // set date
+        table->reg_cell(new DateCell(rest), row, col);
+    } else if (command == "sete") {
+        // set expression
+        table->reg_cell(new ExprCell(rest), row, col);
+    } else if (command == "out") {
+        // output
+        std::ofstream out(to);
+        out << *table;
+        std::cout << "Saved to " << to << '\n';
+    } else if (command == "exit") {
+        return 0;
+    }
+    return 1;
+}
+
+void Excel::command_line() {
+    std::string s;
+    std::getline(std::cin, s);
+    while (parse_input(s)) {
+        std::cout << *table << std::endl << ">> ";
+        std::getline(std::cin, s);
+    }
+}
+
 int main() {
-    TextTable* text = new TextTable();
+    std::cout << "Input table type: " << '\n';
+    std::cout << "0: Text, 1: CSV, 2: HTML" << '\n';
 
-    StringCell* a1 = new StringCell("rawstr");
-    NumberCell* c2 = new NumberCell(2.7);
-    NumberCell* b2 = new NumberCell(5.0);
-    NumberCell* d2 = new NumberCell(4.0);
-    DateCell* b3 = new DateCell(2021, 12, 14);
-    ExprCell* e4 = new ExprCell("3+D2*5+4*(7-2)");
+    int type;
+    std::cin >> type;
 
-    e4->describe();
-
-    text->reg_cell(a1, 0, 0);
-    text->reg_cell(c2, 1, 2);
-    text->reg_cell(b2, 1, 1);
-    text->reg_cell(d2, 1, 3);
-    text->reg_cell(b3, 2, 1);
-    text->reg_cell(e4, 3, 4);
-
-    // CSVTable* csv = new CSVTable(text);
-    // HTMLTable* html = new HTMLTable(text);
-
-    std::string text_content = text->print_table();
-    // std::string csv_content = csv->print_table();
-    // std::string html_content = html->print_table();
-
-    std::cout << text_content << std::endl;
-    // std::cout << csv_content << std::endl;
-    // std::cout << html_content << std::endl;
-
-    // std::ofstream html_out("./7-2/table.html");
-    // if (html_out.is_open()) html_out << html_content;
+    Excel excel(type);
+    excel.command_line();
 
     return 0;
 }
