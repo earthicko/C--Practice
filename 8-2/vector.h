@@ -7,6 +7,7 @@ class Vector {
 
    public:
     Vector(int n = 1);
+    Vector(const Vector& src);
 
     void push_back(std::string s);
     std::string operator[](int i);

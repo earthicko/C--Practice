@@ -4,6 +4,11 @@
 namespace MyExcel {
 Vector::Vector(int n) : data(new std::string[n]), capacity(n), length(0) {}
 
+Vector::Vector(const Vector& src) : capacity(src.capacity), length(src.length) {
+    data = new std::string[capacity];
+    for (int i = 0; i < capacity; i++) data[i] = src.data[i];
+}
+
 void Vector::push_back(std::string s) {
     if (capacity <= length) {
         std::string* temp = data;
